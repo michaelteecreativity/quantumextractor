@@ -14,7 +14,7 @@ const MAX_SESSION_BATCHES = 400
 const SESSION_PATTERN = /^[a-zA-Z0-9_-]{16,96}$/
 
 const EMAIL_PATTERN = /[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/gi
-const MAILTO_PATTERN = /mailto:([^"'\\s>]+)/gi
+const MAILTO_PATTERN = /mailto:\s*([^"'\s>]+)/gi
 
 function canonicalTarget(value: string) {
   const url = new URL(value)

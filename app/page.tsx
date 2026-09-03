@@ -67,16 +67,17 @@ export default function Page() {
     if (!paths.length) return setNotice('Select at least one page path before scanning.')
     setNotice(''); setResults([]); setFailures([]); setDuplicatesRemoved(0); setIsScanning(true); setIsPaused(false); pauseRef.current = false; setProgress(0); setPhase('Preparing URLs'); abortRef.current = new AbortController()
     const session = `${crypto.randomUUID()}-${crypto.randomUUID()}`; const allResults: Result[] = []; const allFailures: Failure[] = []; let duplicates = 0
-    const baseBatchSize = Math.max(1, Math.floor(50 / paths.length))
-    const scanCount = urlList.length * paths.length
-    try {
+const baseBatchSize = privacyAdded ? 50 : Math.max(1, Math.floor(50 / paths.length))
+const scanCount = privacyAdded ? urlList.length : urlList.length * paths.length    try {
     for (let offset = 0; offset < urlList.length; offset += baseBatchSize) {
         while (pauseRef.current) await new Promise((resolve) => window.setTimeout(resolve, 200))
         const batch = urlList.slice(offset, offset + baseBatchSize); setPhase(offset === 0 ? 'Scanning pages' : 'Extracting emails')
         let response: Response | undefined
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const payload = { urls: batch, paths: [...paths] }
-          if (process.env.NODE_ENV === 'development') console.log('[v0] extraction payload', payload)
+const payload = privacyAdded
+  ? { targets: batch }
+  : { urls: batch, paths: [...paths] }
+            if (process.env.NODE_ENV === 'development') console.log('[v0] extraction payload', payload)
           response = await fetch('/api/extract', { method: 'POST', headers: { 'content-type': 'application/json', 'x-extraction-session': session, 'x-extraction-batch': String(Math.floor(offset / baseBatchSize) + 1) }, body: JSON.stringify(payload), signal: abortRef.current.signal })
           if (response.status !== 429) break
           const wait = Math.min(Number(response.headers.get('Retry-After') || 5), 30); setNotice(`The extraction service asked us to wait ${wait} seconds.`); await new Promise((resolve) => window.setTimeout(resolve, wait * 1000))
@@ -85,7 +86,7 @@ export default function Page() {
         let data: { results?: Result[]; failedPages?: Failure[]; duplicatesRemoved?: number; error?: string; message?: string }
         try { data = await response.json() } catch { throw new Error('The extraction service returned invalid JSON.') }
         if (!response.ok) throw new Error(data.message || data.error || `Extraction failed with HTTP ${response.status}.`)
-        allResults.push(...(data.results || [])); allFailures.push(...(data.failedPages || [])); duplicates += data.duplicatesRemoved || 0; setResults([...new Map(allResults.map((item) => [item.email, item])).values()]); setFailures([...allFailures]); setDuplicatesRemoved(duplicates); setProgress(Math.round((((offset + batch.length) * paths.length) / scanCount) * 100)); if (offset + batch.length >= urlList.length) setPhase('Cleaning results')
+        allResults.push(...(data.results || [])); allFailures.push(...(data.failedPages || [])); duplicates += data.duplicatesRemoved || 0; setResults([...new Map(allResults.map((item) => [item.email, item])).values()]); setFailures([...allFailures]); setDuplicatesRemoved(duplicates); setProgress(Math.round(((offset + batch.length) / scanCount) * 100)) / scanCount) * 100)); if (offset + batch.length >= urlList.length) setPhase('Cleaning results')
       }
       setProgress(100); setPhase('Complete'); setNotice(allResults.length ? `Scan complete. Found ${new Set(allResults.map((item) => item.email)).size} unique email${allResults.length === 1 ? '' : 's'}.` : 'Scan complete. No public emails found.')
     } catch (error) { setNotice(error instanceof DOMException && error.name === 'AbortError' ? 'Scan stopped.' : error instanceof Error ? error.message : 'Extraction failed. Please try again.') } finally { setIsScanning(false); abortRef.current = null }
